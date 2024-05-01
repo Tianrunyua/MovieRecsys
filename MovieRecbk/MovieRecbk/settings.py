@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-)c^1#1r$lr26b4%x-!l&pb_#6cj(tnah&emun4ar$a*z-9jd57
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", 'localhost']
 
 
 # Application definition
@@ -38,14 +38,16 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "sysMovie",
-    "rest_framework"
+    "rest_framework",
+    "corsheaders"
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    'corsheaders.middleware.CorsMiddleware',
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    # "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -76,12 +78,15 @@ WSGI_APPLICATION = "MovieRecbk.wsgi.application"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'HOST': "127.0.0.1",
+        'PORT': 3306,
+        'NAME': "iptv_rs",  # 导出到本地
+        'USER': "root",
+        'PASSWORD': "0613",
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -99,11 +104,13 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = 'zh-hans'
 
-TIME_ZONE = "UTC"
+TIME_ZONE = 'Asia/Shanghai'
 
 USE_I18N = True
+
+USE_L10N = True
 
 USE_TZ = True
 
@@ -116,4 +123,5 @@ STATIC_URL = "static/"
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+CORS_ORIGIN_ALLOW_ALL = True
