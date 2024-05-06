@@ -113,7 +113,7 @@ export default {
         let queryinfo = {
            username: window.sessionStorage.getItem("loginUser"),
         }
-        const {data: res} =  axios.get('sysMovie/quit/', {params:queryinfo});
+        const {data: res} =  this.$axios.get('sysMovie/quit/', {params:queryinfo});
         return this.$router.push('/login')  //使用 Vue Router 的 push 方法导航到登录页面。
       }
       this.$router.push('/' + command)
