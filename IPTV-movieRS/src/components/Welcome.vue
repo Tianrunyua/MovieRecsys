@@ -84,7 +84,7 @@ export default {
         { id: 1, name: '首页', path: '/home' },
         { id: 2, name: '电影', path: '/movie' },
         { id: 3, name: '推荐', path: '/Recommend' },
-        { id: 4, name: '历史', path: '/history' }
+        //{ id: 4, name: '历史', path: '/history' }
       ],
 
       kw: ''   // 用于绑定搜索框的关键字数据

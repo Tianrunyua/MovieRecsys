@@ -63,6 +63,7 @@ class Net:
         self.simv_itemdict = np.load(self.data_path + self.dataset +"/simv_itemdict.npy",allow_pickle=True).item()
         self.simt_itemdict = np.load(self.data_path + self.dataset +"/simt_itemdict.npy",allow_pickle=True).item()
         self.itemcom_dict = np.load(self.data_path + self.dataset +"/item_graph_dict.npy",allow_pickle=True).item()
+        self.itemcomgraph_matrix = np.load(self.data_path + self.dataset +"/item_graph_dict_all.npy",allow_pickle=True)
         # 特征初始化
         self.features = [self.v_feat, self.t_feat]
 
@@ -502,3 +503,212 @@ def getcomMovies_func(request):
         })
     result["data"] = _list
     return JsonResponse(result)
+
+
+# SearchMovie页面的方法，根据电影名查找某部电影
+def find_func(request):
+    # 接口传入的page参数
+    _movieName = request.GET.get("movieName")
+
+    result = dict()
+    result["code"] = 1
+    result["data"] = dict()
+    _list = list()
+    MovieInfo = Movies_table.objects.filter(name__contains=_movieName) # __contains模糊查询
+    # MovieIds = Movies.objects.filter(name__contains=_MovieClass).order_by("-Watchtimes") #__contains模糊查询
+
+    total = MovieInfo.__len__()
+    for one in MovieInfo:
+        # print(one)
+        _list.append(
+            {
+                "movieName": one.name,
+                "movie_id": one.id,
+                "tag": one.bastags,
+                "releaseDate": one.releaseyear,
+                "watchtimes": one.Watchtimes,
+                "area": one.originalcountry,
+                "duration": one.duration,
+                "movieIntroduction": one.description,
+            }
+        )
+    result["data"] = _list
+    result["total"] = total
+    return JsonResponse(result)
+
+
+# UserInfo页面的方法，根据用户名查找用户信息
+def getUserInfo_func(request):
+    result = dict()
+    result["code"] = 200
+    result["data"] = dict()
+    one = User_table.objects.filter(username=request.GET.get("username"))[0]
+    result["data"] = {
+        "userName": one.username,
+        "email": one.email,
+        "phoneNumber": one.phoneNumber,
+        "sex": one.sex
+    }
+    return JsonResponse(result)
+
+
+def update_iptvuser_mysql(username="", email="", phoneNumber="", sex=""):
+    User_table.objects.filter(username=username).update(username=username, email=email, phoneNumber=phoneNumber, sex=sex)
+    print("更新用户信息成功")
+
+
+# UserInfo页面的方法，修改用户信息
+def editUser_func(request):
+    json_str = request.body
+    json_dict = json.loads(json_str)
+
+    # 先获取到用户名和密码，然后需要做几个判断
+    userName = json_dict.get("userName", None)
+    email = json_dict.get("email", None)
+    phoneNumber = json_dict.get("phoneNumber", None)
+    sex = json_dict.get("sex", None)
+
+    update_iptvuser_mysql(
+        username=userName,
+        email=email,
+        phoneNumber=phoneNumber,
+        sex=str(sex)
+    )
+
+    result = dict()
+    result["code"] = 200
+    return JsonResponse(result)
+
+
+# Recommendone页面的方法，获得推荐列表 与 各推荐电影的信息（基本信息 + 推荐分数/兴趣值 + 用户的视觉偏好和文本偏好 + 最相似度、最大共现度的用户历史记录 + 推荐理由（三个电影名字））！
+def getRecommend_func(request):
+    """
+    参数
+    queryInfo = {
+        username: window.sessionStorage.getItem("loginUser"),
+        pageSize: 5,
+        curpageNum: this.curpageNum
+      }
+    """
+    print("這裏！！！")
+    _Username = request.GET.get("username")
+    _page_id = int(request.GET.get("curpageNum"))
+    _page_size = int(request.GET.get("pageSize"))
+
+    # 获取当前用户的最近的历史交互行为
+    ## 先利用user_table获得当前用户的user_id
+    curuser = User_table.objects.filter(username=_Username)[0]
+    curuserid = int(curuser.id)
+    ## 获取最近一天的历史记录  (第二次查询筛选出History_table中time字段大于或等于curdate（即今天）的所有记录。)
+    curuser_history_list = []  # 保存 [(uid, iid)]
+    curdate = time.strftime("%Y-%m-%d", time.localtime())
+    clicks = History_table.objects.filter(name=_Username) & History_table.objects.filter(time__gte=curdate)
+    print("用户点击：", clicks)
+
+    if clicks.__len__() == 0:
+        pass
+    else:
+        for one in clicks:
+            curuser_history_list.append([curuserid, one.mapitemid])
+
+    # 根据用户最近的历史交互行为更新图网络，获得推荐列表和推荐分数
+    ranklist, rankscore = egcn.run(curuserid, curuser_history_list)     ######### 重点1
+    rankscore = rankscore.tolist()
+
+    # 推荐列表去除所有（不限制时间）已经看过的电影
+    clicks_all = History_table.objects.filter(name=_Username)
+    ranklist = [i + 1 for i in ranklist.tolist()][:100]  # 取前100
+    for clicks_all_item in clicks_all:
+        if clicks_all_item.iptv_itemid in ranklist:
+            ranklist.remove(clicks_all_item.iptv_itemid)  # 移除
+
+    # 遍历”分页后“的推荐排名列表和对应的评分
+    for (item, score) in zip(
+            ranklist[(_page_id - 1) * _page_size: _page_id * _page_size],
+            rankscore[(_page_id - 1) * _page_size: _page_id * _page_size]
+    ):
+        one = Movies_table.objects.filter(id=item)[0]
+        curitemid = one.id
+
+        ## ① 计算 当前用户 对 每个推荐电影的视觉和文本属性 偏好
+        v_att, t_att = egcn.computer_modalatt(curuserid, int(one.mapitemid))     ######### 2
+
+        ## ② 说明推荐当前电影的原因：计算 当前推荐电影 与 每个用户历史记录 在视觉和文本属性上的相似度及共现度，记录最大值以及对应项目id
+        max_tsimval = 0     # 文本相似度最大值
+        max_tsimid = 0      # 文本相似度最大值的id
+        max_vsimval = 0
+        max_vsimid = 0
+        max_comval = 0
+        max_comid = 0
+
+        itemv_embd, itemt_embd = egcn.preget_modalatt()  # 获取所有电影的文本和图像特征   ######## 3
+        for history_click in clicks_all:    ######## 4
+            cur_vsimval = torch.matmul(torch.squeeze(itemv_embd[curitemid - 1]),
+                                       torch.squeeze(itemv_embd[history_click.iptv_itemid - 1]))
+            cur_tsimval = torch.matmul(torch.squeeze(itemt_embd[curitemid - 1]),
+                                       torch.squeeze(itemt_embd[history_click.iptv_itemid - 1]))
+            cur_comval = egcn.itemcomgraph_matrix[curitemid - 1][history_click.iptv_itemid - 1]
+            # 记录最大值
+            if cur_vsimval > max_vsimval:
+                max_vsimval = cur_vsimval
+                max_vsimid = history_click.iptv_itemid
+            if cur_tsimval > max_tsimval:
+                max_tsimval = cur_tsimval
+                max_tsimid = history_click.iptv_itemid
+            if cur_comval > max_comval:
+                max_comval = cur_comval
+                max_comid = history_click.iptv_itemid
+
+        ## 组成推荐理由（左侧的）
+        if max_vsimval == 0:
+            namev = " "
+            simv = "无"
+        else:
+            namev = Movies_table.objects.filter(id=max_vsimid)[0].name
+            simv = "与您观看的【"+namev+"】最相关，相关度为:"+str(round(max_vsimval.item()*2*v_att, 3))     ####### 5 结合了历史记录的 相关度的计算？
+        if max_tsimval == 0:
+            namet = " "
+            simt = "无"
+        else:
+            namet = Movies_table.objects.filter(id=max_tsimid)[0].name
+            simt = "与您观看的【"+namet+"】最相关，相关度为:"+str(round(max_tsimval.item()*2*t_att, 3))
+        if max_comval == 0:
+            namecom = " "
+            com = "无"
+        else:
+            namecom = Movies_table.objects.filter(id=max_comid)[0].name
+            com = "与您观看的【"+namecom+"】最相关，共现度为:"+str(int(max_comval))
+
+        ## 组成推荐理由2（右侧的） v特征、t特征相似度最高、共现度最高的3部用户已观看电影作为推荐理由“根据您已观看的《》《》《》为您推荐”
+        movienameset = set([namet, namev, namecom])
+        movienameset.discard(" ")
+        reason_moviename = ",".join(list(movienameset))
+
+        ## 保存所有信息
+        show_list = []
+        show_list.append(
+            {
+                "score": score / 10,                                    # 推荐得分
+                "movieName": one.name,                                  # 当前推荐电影的基本信息
+                "movie_id": one.id,
+                "tag": one.bastags,
+                "releaseDate": one.releaseyear,
+                "area": one.originalcountry,
+                "duration": one.duration,
+                "movieIntroduction": "简介：" + one.description,
+                "author": one.kpeople,
+                "movieInfoUrl": '/movieInfo/'+str(one.id),              # 链接电影详情页
+                "v_att": round(v_att * 100, 1),                         # 用户对当前推荐电影的 图像偏好
+                "t_att": round(t_att * 100, 1),                         # 用户对当前推荐电影的 文本偏好
+                "simt": [simt],                                         # 文本模态的推荐理由
+                "simv": [simv],                                         # 图像模态的推荐理由
+                "com": [com],                                           # 共现度的推荐理由
+                "reason": "根据你观看的【"+reason_moviename+"】向您推荐",   # 总推荐理由
+            }
+        )
+        result = dict()
+        result["data"] = dict()
+        _total = len(ranklist)
+        result["data"]["data"] = show_list
+        result["data"]["total"] = _total
+        return JsonResponse(result)

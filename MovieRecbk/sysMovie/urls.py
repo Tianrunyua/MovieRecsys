@@ -19,4 +19,10 @@ urlpatterns = [
     url('getVsimMovies', views.getVsimMovies_func),
     url('getcomMovies', views.getcomMovies_func),
 
+    url('find', views.find_func),
+
+    url('getUserInfo', views.getUserInfo_func),
+    url('editUser', views.editUser_func),
+
+    url('RS', views.getRecommend_func),
 ]
