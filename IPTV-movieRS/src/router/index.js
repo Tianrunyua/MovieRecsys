@@ -64,17 +64,17 @@ export default new Router({
 //          component: history
 //        },
         {
-          path: '/Recommend/',
+          path: '/Recommend',
           name: 'recommendmain',
           component: RecommendMain,
-//          redirect: '/Recommend/RSDemo',
-//          children:[
-//            {
-//              path: 'RSDemo',         // 三级 不用/  二级后面带上/就可以
-//              name: 'recommendone',
-//              RecommendOne
-//            }
-//          ]
+          redirect: '/Recommend/RSDemo',
+          children:[
+            {
+              path: 'RSDemo',         // 三级 不用/  二级后面带上/就可以
+              name: 'recommendone',
+              RecommendOne
+            }
+          ]
         },
         {
           path: '/userMenu',         // 起导航栏的作用

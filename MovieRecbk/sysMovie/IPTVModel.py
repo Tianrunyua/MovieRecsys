@@ -103,8 +103,8 @@ class User_Graph_sample(torch.nn.Module):
 class MultiGraph(torch.nn.Module):
     def __init__(self, features, edge_index,batch_size, num_user, num_item, aggr_mode, construction,
                  num_CFGCN_layer, num_itemgraph_layer, has_id, dim_latent, reg_weight,
-                 user_item_dict,dataset,item_graph_edge_index_com,item_graph_edge_index_v,
-                 item_graph_edge_index_t,user_topk,num_pre,user_graph,device):
+                 user_item_dict,dataset,item_graph_edge_index_com, item_graph_edge_index_v,
+                 item_graph_edge_index_t, user_topk, num_pre, user_graph, device):
         super(MultiGraph, self).__init__()
         self.batch_size = batch_size
         self.num_user = num_user
@@ -151,7 +151,7 @@ class MultiGraph(torch.nn.Module):
         self.t_feat = torch.tensor(t_feat, dtype=torch.float).to(self.device)
         self.dim_t = self.t_feat.shape[1]
         self.dim_cat=self.dim_t+self.dim_v
-        self.tra_v=nn.Linear(self.dim_latent,self.dim_v)
+        self.tra_v=nn.Linear(self.dim_latent, self.dim_v)
         self.tra_t = nn.Linear(self.dim_latent, self.dim_t)
 
         # 构建模态对应的图卷积网络
@@ -180,9 +180,9 @@ class MultiGraph(torch.nn.Module):
                                                   , dim=2), self.weight_tgraph)
         self.t_feat_hero = torch.squeeze(self.t_feat_hero)
         self.v_feat_hero = torch.squeeze(self.v_feat_hero)
-        return self.v_feat_hero,self.t_feat_hero
+        return self.v_feat_hero, self.t_feat_hero
 
-    def computer_itematt(self,edge_index,v_feat_hero,t_feat_hero):
+    def computer_itematt(self, edge_index, v_feat_hero, t_feat_hero):
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous().to(self.device)
         edge_index = torch.cat((edge_index, edge_index[[1, 0]]), dim=1)
         v_feat = self.v_feat + v_feat_hero
@@ -196,9 +196,9 @@ class MultiGraph(torch.nn.Module):
             self.user_rep = torch.matmul(torch.cat((self.v_rep[:self.num_user], self.t_rep[:self.num_user])
                                                    , dim=2), self.weight_u)
             self.user_rep = torch.squeeze(self.user_rep)
-        return self.user_rep,self.v_rep,self.t_rep
+        return self.user_rep, self.v_rep, self.t_rep
 
-    def forward(self,curuser,edge_index,user_graph,v_feat_hero,t_feat_hero):
+    def forward(self, curuser, edge_index, user_graph, v_feat_hero, t_feat_hero):
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous().to(self.device)
         edge_index = torch.cat((edge_index, edge_index[[1, 0]]), dim=1)
         v_feat = self.v_feat + v_feat_hero
@@ -207,13 +207,14 @@ class MultiGraph(torch.nn.Module):
         self.t_rep, self.t_preference = self.t_gcn(edge_index, t_feat)
         # ########################################### multi-modal information construction
         representation = self.v_rep + self.t_rep
+
         if self.construction == 'weighted_sum':
             self.v_rep = torch.unsqueeze(self.v_rep, 2)
             self.t_rep = torch.unsqueeze(self.t_rep, 2)
             self.user_rep = torch.matmul(torch.cat((self.v_rep[:self.num_user], self.t_rep[:self.num_user])
                                               ,dim=2),self.weight_u)
             self.user_rep = torch.squeeze(self.user_rep)
-        item_rep = representation[self.num_user:]
+
         index = torch.tensor(user_graph)[curuser].tolist()
         u_features = self.user_rep[index]
         # user_matrix = self.user_weight_matrix[curuser].unsqueeze(1)
@@ -224,6 +225,8 @@ class MultiGraph(torch.nn.Module):
         # h_u1 = self.user_graph(self.user_rep, self.user_graph,curuser, self.user_weight_matrix.to(self.device))
         # self.user_rep = self.user_rep + h_u1
         # self.result_embed = torch.cat((self.user_rep, item_rep), dim=0)
+
+        item_rep = representation[self.num_user:]
         score_matrix = torch.matmul(self.user_rep, item_rep.t())
         col = self.user_item_dict[curuser]
         col = torch.LongTensor(list(col)) - self.num_user

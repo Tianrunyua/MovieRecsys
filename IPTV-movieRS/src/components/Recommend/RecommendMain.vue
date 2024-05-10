@@ -9,12 +9,9 @@
         active-text-color="#ffd04b"
         router>
     </el-menu>
-
     <router-view></router-view>
-
   </div>
 </template>
-
 
 
 

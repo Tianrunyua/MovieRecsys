@@ -1,5 +1,5 @@
 <template>
-  <div class="recommonContain">
+  <div class="recommonContain">哈哈哈哈哈
     <div class="mainContent">
       <div class="Con ">
         <div class="allsign">
@@ -51,7 +51,7 @@
 import RSmovieItem from '../func_module/RSmovie-item';
 
 export default {
-  name: 'Recommendone',
+  name: 'recommendone',
   components: {
     RSmovieItem
   },
@@ -68,14 +68,12 @@ export default {
   },
 
   methods: {
-
     async getRSData () {
       let queryInfo = {
         username: window.sessionStorage.getItem("loginUser"),
         pageSize: 5,
         curpageNum: this.curpageNum,
       }
-      console.log(queryInfo)
       const { data : res } = await this.$axios.get('sysMovie/RS', {params: queryInfo})
       this.movies = res.data.data
       console.log(res)
@@ -87,11 +85,11 @@ export default {
       this.curpageNum = newPage
       this.getRSData ()
     }
-
   },
-  //created() {
-  //  this.getRSData ()
-  //},
+
+  created() {
+    this.getRSData ()
+  },
 }
 </script>
 

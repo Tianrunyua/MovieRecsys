@@ -46,14 +46,14 @@ class Net:
         # 加载数据集和特征
         ## u-i
         self.user_item_dict_train = np.load(self.data_path + self.dataset + '/smalldata/user_item_dict_train.npy',allow_pickle=True).item()
-        ## train val test
+        ## train val test  用户二部图
         self.edge_index = np.load(self.data_path + self.dataset + '/smalldata/train.npy', allow_pickle=True).T
         self.val_dataset = np.load(self.data_path + self.dataset + '/smalldata/val_full.npy', allow_pickle=True)
         self.test_dataset = np.load(self.data_path + self.dataset + '/smalldata/test_full.npy', allow_pickle=True)
         ## feat_v t   文本和图像的预训练特征向量
         self.v_feat = np.load(self.data_path + self.dataset + '/feat_v.npy', allow_pickle=True)
         self.t_feat = np.load(self.data_path + self.dataset + '/feat_t.npy', allow_pickle=True)
-        ## graph_user  用户二部图
+        ## graph_user  用户图
         self.user_graph = np.load(self.data_path + self.dataset +"/user_graph_sample.npy").tolist()
         ## graph_edge_index_com v t  # 加载项目图的边索引
         self.item_graph_edge_index_com = np.load(self.data_path + self.dataset +"/edge_com.npy")
@@ -64,7 +64,8 @@ class Net:
         self.simt_itemdict = np.load(self.data_path + self.dataset +"/simt_itemdict.npy",allow_pickle=True).item()
         self.itemcom_dict = np.load(self.data_path + self.dataset +"/item_graph_dict.npy",allow_pickle=True).item()
         self.itemcomgraph_matrix = np.load(self.data_path + self.dataset +"/item_graph_dict_all.npy",allow_pickle=True)
-        # 特征初始化
+
+        # 特征拼接
         self.features = [self.v_feat, self.t_feat]
 
         # 模型初始化，加载模型权重
@@ -81,14 +82,7 @@ class Net:
         # 服务器
         # model_state_dict = torch.load('./sysMovie/MFMGNN_IPTVRS/savemodel/model.pth')
         self.model.load_state_dict(model_state_dict)
-        # print('module weights loaded....')
-
-    def update_graph(self, curuser, curuser_history_list):
-        '''更新历史记录更新后的二部图'''
-        # 将当前用户的浏览历史添加到边索引列表中
-        edge_index_list = self.edge_index.tolist()
-        new_edge_index = np.array(edge_index_list+curuser_history_list)
-        return new_edge_index
+        print('module weights loaded....')
 
     def get_itemfeat(self):
         # 计算项目特征
@@ -96,7 +90,7 @@ class Net:
 
     def preget_modalatt(self):
         # 预先计算模态注意力
-        self.u_pre_nousergraph, self.v_embd_att, self.t_embd_att = self.model.computer_itematt(self.edge_index,self.v_feat_hero,self.t_feat_hero)
+        self.u_pre_nousergraph, self.v_embd_att, self.t_embd_att = self.model.computer_itematt(self.edge_index, self.v_feat_hero, self.t_feat_hero)
         return self.v_embd_att[:self.num_user], self.t_embd_att[:self.num_user]
 
     def computer_modalatt(self, curuser, curitem):
@@ -106,17 +100,26 @@ class Net:
         user_matrix = self.model.user_weight_matrix[curuser]
         u_pre = torch.matmul(user_matrix, u_features)
         urepfinal = self.u_pre_nousergraph[curuser] + u_pre.squeeze()
+
         t_att = torch.matmul(urepfinal, self.t_embd_att[curitem])
         v_att = torch.matmul(urepfinal, self.v_embd_att[curitem])
         att = F.softmax(torch.cat((v_att, t_att), dim=0), dim=0).tolist()
         return att[0], att[1]
 
+    def update_graph(self, curuser, curuser_history_list):
+        '''更新历史记录更新后的二部图'''
+        # 将当前用户的浏览历史添加到边索引列表中
+        edge_index_list = self.edge_index.tolist()
+        new_edge_index = np.array(edge_index_list+curuser_history_list)
+        return new_edge_index
+
     def run(self, cur_user, curuser_history_list):
         # 更新二部图，其他图也可以在这里更新
         update_edge_index = self.update_graph(cur_user, curuser_history_list)
         # 获取推荐结果
-        ranklist = self.model.forward(cur_user, update_edge_index, self.user_graph,self.v_feat_hero,self.t_feat_hero)
+        ranklist = self.model.forward(cur_user, update_edge_index, self.user_graph, self.v_feat_hero, self.t_feat_hero)
         return ranklist
+
 
 egcn = Net()
 egcn.get_itemfeat()
@@ -590,7 +593,7 @@ def getRecommend_func(request):
         curpageNum: this.curpageNum
       }
     """
-    print("這裏！！！")
+    # print("這裏！！！")
     _Username = request.GET.get("username")
     _page_id = int(request.GET.get("curpageNum"))
     _page_size = int(request.GET.get("pageSize"))
@@ -641,8 +644,8 @@ def getRecommend_func(request):
         max_comval = 0
         max_comid = 0
 
-        itemv_embd, itemt_embd = egcn.preget_modalatt()  # 获取所有电影的文本和图像特征   ######## 3
-        for history_click in clicks_all:    ######## 4
+        itemv_embd, itemt_embd = egcn.preget_modalatt()  # 获取所有电影的文本和图像特征，融入了用户-项目交互图所表达的上下文关系和依赖性的   ######## 3
+        for history_click in clicks_all:                                                             ######## 4
             cur_vsimval = torch.matmul(torch.squeeze(itemv_embd[curitemid - 1]),
                                        torch.squeeze(itemv_embd[history_click.iptv_itemid - 1]))
             cur_tsimval = torch.matmul(torch.squeeze(itemt_embd[curitemid - 1]),
